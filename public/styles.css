@@ -135,7 +135,8 @@ tbody tr:hover { background: var(--panel-2); }
 .diverge { color: var(--orange); margin-left: 6px; }
 
 .empty { text-align: center; color: var(--muted); padding: 30px; }
-.hidden { display: none; }
+/* !important : .hidden doit toujours l'emporter, y compris sur .modal { display:flex } */
+.hidden { display: none !important; }
 
 .modal {
   position: fixed; inset: 0;
