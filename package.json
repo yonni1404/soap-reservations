@@ -1,0 +1,22 @@
+{
+  "name": "soap-reservations",
+  "version": "1.0.0",
+  "description": "Récupération FTP, extraction et suivi des fichiers de réservation SOAP (Camping du Lac de Carouge)",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "scan": "node src/scan-cli.js",
+    "parse": "node src/parse-cli.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "basic-ftp": "^5.0.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "node-cron": "^3.0.3"
+  }
+}

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Suivi des réservations SOAP — Camping du Lac de Carouge</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Suivi des réservations SOAP</h1>
+      <p class="sub">Camping du Lac de Carouge — extraction &amp; consolidation des fichiers FTP</p>
+    </div>
+    <div class="actions">
+      <button id="scanBtn" class="btn primary">⟳ Scanner maintenant</button>
+      <a id="exportBtn" class="btn" href="/api/export.csv">⤓ Export CSV</a>
+    </div>
+  </header>
+
+  <section id="banner" class="banner hidden"></section>
+
+  <section class="stats" id="stats"></section>
+
+  <section class="toolbar">
+    <div class="filters" id="filters">
+      <button class="chip active" data-status="all">Tout</button>
+      <button class="chip" data-status="success">Réussies</button>
+      <button class="chip" data-status="error_pms">Erreur PMS</button>
+      <button class="chip" data-status="error_other">Autres erreurs</button>
+      <button class="chip" data-status="pending">En attente</button>
+    </div>
+    <input type="search" id="search" placeholder="Rechercher (BScrc, n° résa, établissement…)">
+  </section>
+
+  <section class="table-wrap">
+    <table id="table">
+      <thead>
+        <tr>
+          <th>Statut</th>
+          <th>Date</th>
+          <th>Client</th>
+          <th>N° résa</th>
+          <th>Montant</th>
+          <th>Paiement</th>
+          <th>Tent.</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <p id="empty" class="empty hidden">Aucune réservation pour ce filtre.</p>
+  </section>
+
+  <!-- Détail (modale) -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-box">
+      <button class="modal-close" id="modalClose">✕</button>
+      <div id="modalContent"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

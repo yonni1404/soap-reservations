@@ -1,0 +1,17 @@
+services:
+  soap-reservations:
+    build: .
+    image: soap-reservations:latest
+    container_name: soap-reservations
+    restart: unless-stopped
+    ports:
+      # Interface web : http://IP_DU_NAS:3010
+      - "3010:3010"
+    env_file:
+      # Identifiants FTP et configuration — à créer sur le NAS depuis .env.example
+      - .env
+    environment:
+      # La base est dans le volume monté ci-dessous (persiste entre redémarrages)
+      - DB_PATH=/app/data/soap.db
+    volumes:
+      - ./data:/app/data

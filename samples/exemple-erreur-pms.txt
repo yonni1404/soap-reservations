@@ -1,0 +1,81 @@
+===> Requête SOAP:
+
+Array
+(
+    [BScrc] => aaaf563a-aed5-46c3-bd44-e0745ecc2bdd
+    [myCaddyPayments] => Array
+        (
+            [WSPaymentSelectedList] => Array
+                (
+                    [WSPayment] => Array
+                        (
+                            [MyEnumPaymentKeyStr] => MasterCard
+                            [MyEnumPaymentTypeStr] => CreditCard
+                            [PaymentID] => 119616
+                            [MyLabelPayment] => MasterCard
+                            [SuspendedUntilIncluded] => 
+                            [IsPaymentActif] => 1
+                            [NbDaysLeft] => 
+                            [FieldList] => Array
+                                (
+                                )
+
+                            [AmountMax] => 565.6
+                            [Amount] => 565.6
+                            [Order] => 
+                            [MyEnumTypeFieldStr] => singleField
+                            [WillPayOffsite] => 1
+                        )
+
+                )
+
+            [MySummaryPayment] => Array
+                (
+                    [TotalAmount] => 565.6
+                    [TotalcaddyAmount] => 565.6
+                    [IsFinished] => 1
+                )
+
+        )
+
+    [user] => carouge
+    [password] => ****** (masqué)
+    [idEngine] => 2093
+    [idEstablishment] => 2666
+    [extraInformations] => Array
+        (
+            [postPaymentRedirectionUrl] => https://www.campinglacdecarouge.fr/reservation/?step=finalisation&BookingId={BookingId}
+            [postPaymentCancelRedirectionUrl] => https://www.campinglacdecarouge.fr/reservation/?step=finalisation&cancel=1
+        )
+
+)
+
+
+===> Réponse SOAP
+
+Array
+(
+    [postBooking_v3Result] => Array
+        (
+            [recorded] => 
+            [bookingId] => 
+            [myErrorPB] => Array
+                (
+                    [myErrorDetailPBList] => Array
+                        (
+                            [errorDetailPB] => Array
+                                (
+                                    [system] => 
+                                    [code] => PMS
+                                    [trad] => Le système n'a pas réussi à interroger le planning de l'établissement. Nous ne vous laissons donc pas poursuivre le processus de réservation. Nous vous invitons à réessayer dans quelques minutes ou à contacter directement l'établissement au 04 80 81 97 90.
+                                )
+
+                        )
+
+                )
+
+            [isFirmBooking] => 
+            [DossierId] => 
+        )
+
+)
