@@ -10,7 +10,11 @@ const { runScan } = require('./processor');
 const app = express();
 app.use(express.json());
 app.use('/api', apiRouter);
-app.use(express.static(path.join(__dirname, '../public')));
+// no-cache : le navigateur revalide à chaque fois → les mises à jour de l'interface
+// sont prises en compte par un simple F5 (plus besoin de rechargement forcé)
+app.use(express.static(path.join(__dirname, '../public'), {
+  setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
+}));
 
 app.listen(config.port, () => {
   console.log(`\n  SOAP-Réservations — interface sur http://localhost:${config.port}`);

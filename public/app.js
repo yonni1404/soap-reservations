@@ -74,12 +74,12 @@ async function openDetail(bscrc) {
     banner('err', 'Détail introuvable pour cette réservation.');
     return;
   }
-  const attempts = (r.attempts_list || []).map((a) => `
-    <div class="attempt">
+  const fileButtons = (r.attempts_list || []).map((a) => `
+    <button type="button" class="file-btn" data-file="${escapeHtml(a.filename)}">
       <span class="badge ${a.status}">${STATUS_LABEL[a.status] || a.status}</span>
-      ${euro(a.amount)} · ${dt(a.seen_at)} · <span class="mono">${a.filename}</span>
-      ${a.error_message ? `<div class="err-msg">${escapeHtml(a.error_message)}</div>` : ''}
-    </div>
+      <span class="file-name mono">${escapeHtml(a.filename)}</span>
+      <span class="muted">${dt(a.seen_at)} · ${euro(a.amount)}</span>
+    </button>
   `).join('');
 
   $('#modalContent').innerHTML = `
@@ -102,11 +102,39 @@ async function openDetail(bscrc) {
       <dt>Dernière MAJ</dt><dd>${dt(r.last_update)}</dd>
     </dl>
     <div class="attempts">
-      <h3>Historique des tentatives (${r.attempts_list?.length || 0})</h3>
-      ${attempts || '<p class="err-msg">Aucune tentative enregistrée.</p>'}
+      <h3>Fichiers reçus (${r.attempts_list?.length || 0}) — clique un fichier pour voir son contenu</h3>
+      <div class="file-list">${fileButtons || '<p class="err-msg">Aucun fichier.</p>'}</div>
+      <div id="fileViewer"></div>
     </div>
   `;
+
+  // Branche l'affichage du contenu sur chaque bouton fichier
+  $('#modalContent').querySelectorAll('.file-btn').forEach((b) => {
+    b.onclick = () => {
+      $('#modalContent').querySelectorAll('.file-btn').forEach((x) => x.classList.remove('active'));
+      b.classList.add('active');
+      loadFile(b.dataset.file);
+    };
+  });
+
   $('#modal').classList.remove('hidden');
+}
+
+async function loadFile(name) {
+  const viewer = document.getElementById('fileViewer');
+  viewer.innerHTML = '<p class="muted">Chargement…</p>';
+  try {
+    const f = await fetch('/api/files/raw?name=' + encodeURIComponent(name)).then((r) => r.json());
+    if (!f || f.error) {
+      viewer.innerHTML = `<p class="err-msg">${f && f.error ? escapeHtml(f.error) : 'Fichier introuvable'}</p>`;
+      return;
+    }
+    let body = f.raw || '';
+    try { body = JSON.stringify(JSON.parse(body), null, 2); } catch (_) { /* pas du JSON : contenu brut */ }
+    viewer.innerHTML = `<div class="file-head mono">${escapeHtml(name)}</div><pre class="file-raw">${escapeHtml(body)}</pre>`;
+  } catch (e) {
+    viewer.innerHTML = `<p class="err-msg">Erreur : ${escapeHtml(e.message)}</p>`;
+  }
 }
 
 function escapeHtml(s) {

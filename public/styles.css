@@ -162,9 +162,43 @@ tbody tr:hover { background: var(--panel-2); }
 .kv dd { margin: 0; }
 .attempts { margin-top: 18px; }
 .attempts h3 { font-size: 14px; color: var(--muted); }
-.attempt {
-  border-left: 3px solid var(--border);
-  padding: 6px 12px; margin: 6px 0;
+
+.file-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.file-btn {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  text-align: left;
   font-size: 13px;
+}
+.file-btn:hover { background: #324158; }
+.file-btn.active { border-color: var(--accent); background: #1d3a4d; }
+.file-btn .file-name { flex: 1; min-width: 180px; }
+
+.file-head {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  padding: 8px 12px; font-size: 12px; color: var(--muted);
+}
+.file-raw {
+  margin: 0;
+  background: #0b1220;
+  border: 1px solid var(--border);
+  border-radius: 0 0 8px 8px;
+  padding: 14px;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #cbd5e1;
+  max-height: 360px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .err-msg { color: var(--muted); font-size: 13px; margin-top: 4px; }

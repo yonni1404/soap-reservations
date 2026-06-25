@@ -192,7 +192,11 @@ function listFiles(limit = 200) {
   return db.prepare('SELECT id, filename, bscrc, status, action, message, processed_at FROM files ORDER BY processed_at DESC LIMIT ?').all(limit);
 }
 
+function getFileRaw(filename) {
+  return db.prepare('SELECT filename, bscrc, status, message, processed_at, raw FROM files WHERE filename = ?').get(filename);
+}
+
 module.exports = {
   db, alreadyProcessed, upsertFromParse, recordFile,
-  listReservations, getReservation, stats, listFiles,
+  listReservations, getReservation, stats, listFiles, getFileRaw,
 };

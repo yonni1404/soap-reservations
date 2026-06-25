@@ -15,5 +15,7 @@ services:
       - DB_PATH=/app/data/soap.db
     volumes:
       - ./data:/app/data
-      # Interface servie depuis le dépôt : un "git pull" suffit pour les màj front (pas de rebuild)
+      # Code servi depuis le dépôt : un "git pull" suffit pour les màj (pas de rebuild d'image).
+      # Front pris en compte au prochain F5 ; back au prochain "docker compose restart".
       - ./public:/app/public:ro
+      - ./src:/app/src:ro

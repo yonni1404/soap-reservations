@@ -27,6 +27,13 @@ router.get('/files', (req, res) => {
   res.json(db.listFiles());
 });
 
+// Contenu brut d'un fichier traité (pour l'affichage dans le détail)
+router.get('/files/raw', (req, res) => {
+  const f = db.getFileRaw(req.query.name);
+  if (!f) return res.status(404).json({ error: 'Fichier introuvable' });
+  res.json(f);
+});
+
 router.post('/scan', async (req, res) => {
   const result = await runScan({ trigger: 'manuel' });
   res.json(result);
