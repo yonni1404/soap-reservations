@@ -1,0 +1,5 @@
+# Normalise les fins de ligne en LF (le conteneur Docker tourne sous Linux)
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
