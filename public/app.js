@@ -63,7 +63,17 @@ async function loadTable() {
 }
 
 async function openDetail(bscrc) {
-  const r = await fetch('/api/reservations/' + encodeURIComponent(bscrc)).then((x) => x.json());
+  let r;
+  try {
+    r = await fetch('/api/reservations/' + encodeURIComponent(bscrc)).then((x) => x.json());
+  } catch (e) {
+    banner('err', 'Impossible de charger le détail : ' + e.message);
+    return;
+  }
+  if (!r || !r.bscrc) {
+    banner('err', 'Détail introuvable pour cette réservation.');
+    return;
+  }
   const attempts = (r.attempts_list || []).map((a) => `
     <div class="attempt">
       <span class="badge ${a.status}">${STATUS_LABEL[a.status] || a.status}</span>
@@ -144,9 +154,13 @@ async function refresh() {
 }
 
 // ─── Événements ──────────────────────────────────────────────────────────
+function closeModal() { $('#modal').classList.add('hidden'); }
 $('#scanBtn').onclick = scan;
-$('#modalClose').onclick = () => $('#modal').classList.add('hidden');
-$('#modal').onclick = (e) => { if (e.target.id === 'modal') $('#modal').classList.add('hidden'); };
+$('#modalClose').onclick = closeModal;
+// Clic n'importe où sur le fond (hors de la boîte) ferme la fenêtre
+$('#modal').onclick = (e) => { if (!e.target.closest('.modal-box')) closeModal(); };
+// La touche Échap ferme toujours la fenêtre
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
 
 $('#filters').onclick = (e) => {
   const btn = e.target.closest('.chip');
