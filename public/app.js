@@ -71,13 +71,16 @@ async function loadTable() {
     const client = r.email
       ? `${escapeHtml(r.email)}${r.tel ? `<br><span class="muted">${escapeHtml(r.tel)}</span>` : ''}`
       : '—';
+    const methods = [...new Set((r.methods || r.payment_method || '').split(',').map((s) => s.trim()).filter(Boolean))];
+    const payCell = methods.length ? `<span class="pay-list">${methods.map(paymentLogo).join('')}</span>` : '—';
+    const numCell = `${r.booking_id || '—'}${r.booking_count > 1 ? `<div class="muted">${r.booking_count} n° résa</div>` : ''}`;
     tr.innerHTML = `
       <td><span class="badge ${r.final_status}">${STATUS_LABEL[r.final_status] || r.final_status}</span></td>
       <td>${dt(r.tx_time || r.last_update)}</td>
       <td>${client}</td>
-      <td>${r.booking_id || '—'}</td>
+      <td>${numCell}</td>
       <td>${euro(r.amount)}${r.has_divergence ? '<span class="diverge" title="Montant divergent entre tentatives">⚠</span>' : ''}</td>
-      <td>${paymentLogo(r.payment_method)}</td>
+      <td>${payCell}</td>
       <td>${r.attempts}</td>
     `;
     tbody.appendChild(tr);
@@ -96,13 +99,26 @@ async function openDetail(bscrc) {
     banner('err', 'Détail introuvable pour cette réservation.');
     return;
   }
-  const fileButtons = (r.attempts_list || []).map((a) => `
-    <button type="button" class="file-btn" data-file="${escapeHtml(a.filename)}">
-      <span class="badge ${a.status}">${STATUS_LABEL[a.status] || a.status}</span>
-      <span class="file-name mono">${escapeHtml(a.filename)}</span>
-      <span class="muted">${dt(a.seen_at)} · ${euro(a.amount)}</span>
-    </button>
-  `).join('');
+  const bookings = r.bookings || [];
+  const bookingRows = bookings.map((b) => {
+    const kind = b.will_pay_offsite === 0
+      ? '<span class="kind firm">Ferme · virement</span>'
+      : (b.will_pay_offsite === 1 ? '<span class="kind online">Redirection · paiement en ligne</span>' : '');
+    const fileBtns = b.files.map((fn, i) =>
+      `<button type="button" class="file-btn-sm" data-file="${escapeHtml(fn)}">voir fichier${b.files.length > 1 ? ' ' + (i + 1) : ''}</button>`
+    ).join(' ');
+    return `
+      <div class="bk-row">
+        <div class="bk-main">
+          ${paymentLogo(b.payment_method)}
+          <span class="bk-num mono">N° ${b.booking_id || '—'}</span>
+          <span class="badge ${b.status}">${STATUS_LABEL[b.status] || b.status}</span>
+          ${kind}
+          <span class="muted">${dt(b.last_seen)} · ${euro(b.amount)}</span>
+        </div>
+        <div class="bk-files">${fileBtns}</div>
+      </div>`;
+  }).join('');
 
   $('#modalContent').innerHTML = `
     <h2>Réservation <span class="mono">${r.bscrc}</span></h2>
@@ -124,16 +140,16 @@ async function openDetail(bscrc) {
       <dt>Dernière MAJ</dt><dd>${dt(r.last_update)}</dd>
     </dl>
     <div class="attempts">
-      <h3>Fichiers reçus (${r.attempts_list?.length || 0}) — clique un fichier pour voir son contenu</h3>
-      <div class="file-list">${fileButtons || '<p class="err-msg">Aucun fichier.</p>'}</div>
+      <h3>${bookings.length > 1 ? `${bookings.length} numéros de réservation générés` : 'Réservation'} — 1 ligne par n°, avec le moyen de paiement</h3>
+      <div class="bk-list">${bookingRows || '<p class="err-msg">Aucune tentative.</p>'}</div>
       <div id="fileViewer"></div>
     </div>
   `;
 
-  // Branche l'affichage du contenu sur chaque bouton fichier
-  $('#modalContent').querySelectorAll('.file-btn').forEach((b) => {
+  // Branche l'affichage du contenu sur chaque bouton "voir fichier"
+  $('#modalContent').querySelectorAll('.file-btn-sm').forEach((b) => {
     b.onclick = () => {
-      $('#modalContent').querySelectorAll('.file-btn').forEach((x) => x.classList.remove('active'));
+      $('#modalContent').querySelectorAll('.file-btn-sm').forEach((x) => x.classList.remove('active'));
       b.classList.add('active');
       loadFile(b.dataset.file);
     };

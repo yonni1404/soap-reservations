@@ -4,6 +4,7 @@ const { DatabaseSync } = require('node:sqlite');
 const fs = require('fs');
 const path = require('path');
 const config = require('./config');
+const { parseSoapFile } = require('./parser');
 
 const dir = path.dirname(config.dbPath);
 if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -65,6 +66,27 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_resa_status ON reservations(final_status);
 `);
 
+// Migration : colonnes paiement par tentative (ajoutées si absentes, base existante incluse)
+for (const col of ['payment_method TEXT', 'payment_type TEXT', 'will_pay_offsite INTEGER']) {
+  try { db.exec(`ALTER TABLE attempts ADD COLUMN ${col}`); } catch (_) { /* déjà présente */ }
+}
+
+// Backfill : renseigne le moyen de paiement des tentatives existantes à partir du contenu déjà stocké
+(function backfillAttemptPayments() {
+  const rows = db.prepare(`
+    SELECT a.id, f.raw FROM attempts a
+    JOIN files f ON f.filename = a.filename
+    WHERE a.payment_method IS NULL
+  `).all();
+  const upd = db.prepare('UPDATE attempts SET payment_method = ?, payment_type = ?, will_pay_offsite = ? WHERE id = ?');
+  for (const r of rows) {
+    try {
+      const { data } = parseSoapFile(r.raw);
+      upd.run(data.paymentMethod, data.paymentType, data.willPayOffsite, r.id);
+    } catch (_) { /* fichier illisible */ }
+  }
+})();
+
 // Statut "gagnant" : un succès l'emporte toujours sur une erreur.
 const STATUS_RANK = { pending: 0, error_other: 1, error_pms: 1, success: 3 };
 
@@ -81,11 +103,12 @@ function upsertFromParse(filename, data, raw) {
   const now = new Date().toISOString();
 
   db.prepare(`
-    INSERT INTO attempts (bscrc, filename, status, error_code, error_message, amount, booking_id, recorded, seen_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO attempts (bscrc, filename, status, error_code, error_message, amount, booking_id, recorded, payment_method, payment_type, will_pay_offsite, seen_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     data.bscrc, filename, data.status, data.errorCode, data.errorMessage,
-    data.amount, data.bookingId, data.recorded, now
+    data.amount, data.bookingId, data.recorded,
+    data.paymentMethod, data.paymentType, data.willPayOffsite, now
   );
 
   const existing = db.prepare('SELECT * FROM reservations WHERE bscrc = ?').get(data.bscrc);
@@ -157,7 +180,10 @@ function recordFile(filename, { bscrc, status, action, message, raw }) {
 
 // ─── Requêtes pour l'API ────────────────────────────────────────────────
 function listReservations({ status, search } = {}) {
-  let sql = 'SELECT * FROM reservations';
+  let sql = `SELECT *,
+    (SELECT GROUP_CONCAT(DISTINCT payment_method) FROM attempts WHERE attempts.bscrc = reservations.bscrc) AS methods,
+    (SELECT COUNT(DISTINCT booking_id) FROM attempts WHERE attempts.bscrc = reservations.bscrc AND booking_id <> '') AS booking_count
+    FROM reservations`;
   const where = [];
   const params = [];
   if (status && status !== 'all') { where.push('final_status = ?'); params.push(status); }
@@ -175,7 +201,29 @@ function getReservation(bscrc) {
   const resa = db.prepare('SELECT * FROM reservations WHERE bscrc = ?').get(bscrc);
   if (!resa) return null;
   const att = db.prepare('SELECT * FROM attempts WHERE bscrc = ? ORDER BY seen_at ASC').all(bscrc);
-  return { ...resa, attempts_list: att };
+
+  // Regroupe les tentatives par numéro de réservation (bookingId) → 1 ligne par n°
+  const byBooking = new Map();
+  for (const a of att) {
+    const key = a.booking_id || '∅';
+    if (!byBooking.has(key)) {
+      byBooking.set(key, {
+        booking_id: a.booking_id || '',
+        payment_method: a.payment_method,
+        payment_type: a.payment_type,
+        will_pay_offsite: a.will_pay_offsite,
+        status: a.status,
+        amount: a.amount,
+        files: [],
+        first_seen: a.seen_at,
+        last_seen: a.seen_at,
+      });
+    }
+    const g = byBooking.get(key);
+    g.files.push(a.filename);
+    g.last_seen = a.seen_at;
+  }
+  return { ...resa, attempts_list: att, bookings: [...byBooking.values()] };
 }
 
 function stats() {

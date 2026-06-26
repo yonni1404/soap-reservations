@@ -172,21 +172,35 @@ tbody tr:hover { background: var(--panel-2); }
 .attempts { margin-top: 18px; }
 .attempts h3 { font-size: 14px; color: var(--muted); }
 
-.file-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
-.file-btn {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+/* Vue groupée par numéro de réservation */
+.bk-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.bk-row {
   background: var(--panel-2);
   border: 1px solid var(--border);
-  color: var(--text);
   border-radius: 8px;
-  padding: 8px 12px;
-  cursor: pointer;
-  text-align: left;
-  font-size: 13px;
+  padding: 9px 12px;
 }
-.file-btn:hover { background: #324158; }
-.file-btn.active { border-color: var(--accent); background: #1d3a4d; }
-.file-btn .file-name { flex: 1; min-width: 180px; }
+.bk-main { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+.bk-num { font-weight: 600; }
+.bk-files { margin-top: 7px; display: flex; gap: 6px; flex-wrap: wrap; }
+.file-btn-sm {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  border-radius: 6px;
+  padding: 3px 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.file-btn-sm:hover { background: #1d3a4d; }
+.file-btn-sm.active { border-color: var(--accent); background: #1d3a4d; }
+
+.kind { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+.kind.firm { background: #14532d; color: #bbf7d0; }
+.kind.online { background: #334155; color: #cbd5e1; }
+
+/* Liste de logos (plusieurs moyens de paiement) */
+.pay-list { display: inline-flex; gap: 5px; flex-wrap: wrap; align-items: center; }
 
 .file-head {
   background: var(--panel-2);
