@@ -108,13 +108,14 @@ async function openDetail(bscrc) {
       `<button type="button" class="file-btn-sm" data-file="${escapeHtml(fn)}">voir fichier${b.files.length > 1 ? ' ' + (i + 1) : ''}</button>`
     ).join(' ');
     return `
-      <div class="bk-row">
+      <div class="bk-row${b.is_last ? ' is-last' : ''}">
         <div class="bk-main">
           ${paymentLogo(b.payment_method)}
           <span class="bk-num mono">N° ${b.booking_id || '—'}</span>
           <span class="badge ${b.status}">${STATUS_LABEL[b.status] || b.status}</span>
           ${kind}
-          <span class="muted">${dt(b.last_seen)} · ${euro(b.amount)}</span>
+          ${b.is_last ? '<span class="kind last">dernière tentative</span>' : ''}
+          <span class="muted">${dt(b.tx_time || b.seen_at)} · ${euro(b.amount)}</span>
         </div>
         <div class="bk-files">${fileBtns}</div>
       </div>`;

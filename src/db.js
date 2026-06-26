@@ -66,23 +66,23 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_resa_status ON reservations(final_status);
 `);
 
-// Migration : colonnes paiement par tentative (ajoutées si absentes, base existante incluse)
-for (const col of ['payment_method TEXT', 'payment_type TEXT', 'will_pay_offsite INTEGER']) {
+// Migration : colonnes paiement + horodatage par tentative (ajoutées si absentes)
+for (const col of ['payment_method TEXT', 'payment_type TEXT', 'will_pay_offsite INTEGER', 'tx_time TEXT']) {
   try { db.exec(`ALTER TABLE attempts ADD COLUMN ${col}`); } catch (_) { /* déjà présente */ }
 }
 
-// Backfill : renseigne le moyen de paiement des tentatives existantes à partir du contenu déjà stocké
-(function backfillAttemptPayments() {
+// Backfill : renseigne moyen de paiement + horodatage des tentatives existantes depuis le contenu stocké
+(function backfillAttempts() {
   const rows = db.prepare(`
     SELECT a.id, f.raw FROM attempts a
     JOIN files f ON f.filename = a.filename
-    WHERE a.payment_method IS NULL
+    WHERE a.tx_time IS NULL
   `).all();
-  const upd = db.prepare('UPDATE attempts SET payment_method = ?, payment_type = ?, will_pay_offsite = ? WHERE id = ?');
+  const upd = db.prepare('UPDATE attempts SET payment_method = ?, payment_type = ?, will_pay_offsite = ?, tx_time = ? WHERE id = ?');
   for (const r of rows) {
     try {
       const { data } = parseSoapFile(r.raw);
-      upd.run(data.paymentMethod, data.paymentType, data.willPayOffsite, r.id);
+      upd.run(data.paymentMethod, data.paymentType, data.willPayOffsite, data.txTime, r.id);
     } catch (_) { /* fichier illisible */ }
   }
 })();
@@ -103,12 +103,12 @@ function upsertFromParse(filename, data, raw) {
   const now = new Date().toISOString();
 
   db.prepare(`
-    INSERT INTO attempts (bscrc, filename, status, error_code, error_message, amount, booking_id, recorded, payment_method, payment_type, will_pay_offsite, seen_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO attempts (bscrc, filename, status, error_code, error_message, amount, booking_id, recorded, payment_method, payment_type, will_pay_offsite, tx_time, seen_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     data.bscrc, filename, data.status, data.errorCode, data.errorMessage,
     data.amount, data.bookingId, data.recorded,
-    data.paymentMethod, data.paymentType, data.willPayOffsite, now
+    data.paymentMethod, data.paymentType, data.willPayOffsite, data.txTime, now
   );
 
   const existing = db.prepare('SELECT * FROM reservations WHERE bscrc = ?').get(data.bscrc);
@@ -200,7 +200,8 @@ function listReservations({ status, search } = {}) {
 function getReservation(bscrc) {
   const resa = db.prepare('SELECT * FROM reservations WHERE bscrc = ?').get(bscrc);
   if (!resa) return null;
-  const att = db.prepare('SELECT * FROM attempts WHERE bscrc = ? ORDER BY seen_at ASC').all(bscrc);
+  // Ordre chronologique réel (horodatage de la transaction), du plus ancien au plus récent
+  const att = db.prepare('SELECT * FROM attempts WHERE bscrc = ? ORDER BY tx_time ASC, seen_at ASC').all(bscrc);
 
   // Regroupe les tentatives par numéro de réservation (bookingId) → 1 ligne par n°
   const byBooking = new Map();
@@ -215,15 +216,17 @@ function getReservation(bscrc) {
         status: a.status,
         amount: a.amount,
         files: [],
-        first_seen: a.seen_at,
-        last_seen: a.seen_at,
+        tx_time: a.tx_time,
+        seen_at: a.seen_at,
       });
     }
-    const g = byBooking.get(key);
-    g.files.push(a.filename);
-    g.last_seen = a.seen_at;
+    byBooking.get(key).files.push(a.filename);
   }
-  return { ...resa, attempts_list: att, bookings: [...byBooking.values()] };
+  const bookings = [...byBooking.values()]
+    .sort((a, b) => String(a.tx_time || a.seen_at || '').localeCompare(String(b.tx_time || b.seen_at || '')));
+  if (bookings.length) bookings[bookings.length - 1].is_last = true; // dernière tentative
+
+  return { ...resa, attempts_list: att, bookings };
 }
 
 function stats() {
