@@ -134,6 +134,14 @@ tbody tr:hover { background: var(--panel-2); }
 .badge.pending { background: #334155; color: #cbd5e1; }
 .diverge { color: var(--orange); margin-left: 6px; }
 
+/* Logos moyens de paiement */
+.pl-wrap { display: inline-flex; align-items: center; vertical-align: middle; }
+.pl { height: 22px; width: auto; display: block; border-radius: 3px; box-shadow: 0 0 0 1px rgba(255,255,255,.12); }
+.pl-text {
+  display: inline-block; padding: 2px 8px; border-radius: 4px;
+  font-size: 11px; font-weight: 700; line-height: 16px; white-space: nowrap;
+}
+
 .empty { text-align: center; color: var(--muted); padding: 30px; }
 /* !important : .hidden doit toujours l'emporter, y compris sur .modal { display:flex } */
 .hidden { display: none !important; }

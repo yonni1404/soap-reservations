@@ -21,6 +21,28 @@ function dt(s) {
   return new Date(s).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
 }
 
+// ─── Logos des moyens de paiement (SVG inline, aucun appel réseau) ───────
+const PAY_SVG = {
+  mastercard: '<svg viewBox="0 0 32 22" class="pl"><rect width="32" height="22" rx="3" fill="#fff"/><circle cx="13" cy="11" r="6" fill="#EB001B"/><circle cx="19" cy="11" r="6" fill="#F79E1B"/><path d="M16 6.2a6 6 0 000 9.6 6 6 0 000-9.6z" fill="#FF5F00"/></svg>',
+  visa: '<svg viewBox="0 0 32 22" class="pl"><rect width="32" height="22" rx="3" fill="#fff"/><text x="16" y="15.5" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="10" font-weight="700" font-style="italic" fill="#1A1F71">VISA</text></svg>',
+  ideal: '<svg viewBox="0 0 32 22" class="pl"><rect width="32" height="22" rx="3" fill="#fff"/><text x="16" y="15" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="9" font-weight="700" fill="#CC0066">iDEAL</text></svg>',
+  bank: '<svg viewBox="0 0 32 22" class="pl"><rect width="32" height="22" rx="3" fill="#0b3d91"/><g fill="#fff"><path d="M16 4l8 4.2H8z"/><rect x="9.2" y="9.4" width="2.4" height="6.4"/><rect x="14.8" y="9.4" width="2.4" height="6.4"/><rect x="20.4" y="9.4" width="2.4" height="6.4"/><rect x="8" y="16.6" width="16" height="2.2" rx="1"/></g></svg>',
+};
+
+function paymentLogo(method) {
+  const m = (method || '').toLowerCase();
+  const wrap = (inner, label) => `<span class="pl-wrap" title="${escapeHtml(label)}">${inner}</span>`;
+  const textChip = (bg, fg, txt) => `<span class="pl-text" style="background:${bg};color:${fg}">${escapeHtml(txt)}</span>`;
+  if (!method) return '—';
+  if (m.includes('mastercard')) return wrap(PAY_SVG.mastercard, 'Mastercard');
+  if (m.includes('visa')) return wrap(PAY_SVG.visa, 'Visa');
+  if (m.includes('ideal')) return wrap(PAY_SVG.ideal, 'iDEAL');
+  if (m.includes('bancontact')) return wrap(textChip('#1e3a8a', '#ffd800', 'Bancontact'), 'Bancontact');
+  if (m.includes('ancv')) return wrap(textChip('#e30613', '#fff', 'ANCV'), 'ANCV (Chèques-Vacances)');
+  if (m.includes('transfer') || m.includes('virement')) return wrap(PAY_SVG.bank, 'Virement bancaire');
+  return wrap(textChip('#475569', '#e2e8f0', method), method);
+}
+
 async function loadStats() {
   const s = await fetch('/api/stats').then((r) => r.json());
   $('#stats').innerHTML = `
@@ -55,7 +77,7 @@ async function loadTable() {
       <td>${client}</td>
       <td>${r.booking_id || '—'}</td>
       <td>${euro(r.amount)}${r.has_divergence ? '<span class="diverge" title="Montant divergent entre tentatives">⚠</span>' : ''}</td>
-      <td>${r.payment_method || '—'}${r.payment_type ? ` <span class="muted">(${escapeHtml(r.payment_type)})</span>` : ''}</td>
+      <td>${paymentLogo(r.payment_method)}</td>
       <td>${r.attempts}</td>
     `;
     tbody.appendChild(tr);
@@ -92,7 +114,7 @@ async function openDetail(bscrc) {
       <dt>N° réservation</dt><dd>${r.booking_id || '—'}</dd>
       <dt>N° dossier</dt><dd>${r.dossier_id || '—'}</dd>
       <dt>Montant</dt><dd>${euro(r.amount)}${r.has_divergence ? ' ⚠ divergence détectée' : ''}</dd>
-      <dt>Paiement</dt><dd>${r.payment_method || '—'} (${r.payment_type || '—'}) · ID ${r.payment_id || '—'}</dd>
+      <dt>Paiement</dt><dd>${paymentLogo(r.payment_method)} ${escapeHtml(r.payment_method || '—')}${r.payment_type ? ` · ${escapeHtml(r.payment_type)}` : ''} · ID ${r.payment_id || '—'}</dd>
       <dt>Fournisseur paiement</dt><dd>${r.payment_provider || '—'}</dd>
       <dt>Paiement hors site</dt><dd>${r.will_pay_offsite ? 'Oui' : 'Non'}</dd>
       <dt>Code erreur</dt><dd>${r.error_code || '—'}</dd>
