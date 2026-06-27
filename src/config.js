@@ -29,6 +29,19 @@ const config = {
   },
   port: parseInt(process.env.PORT || '3010', 10),
   dbPath: path.resolve(process.env.DB_PATH || './data/soap.db'),
+
+  // Authentification (mot de passe initial, modifiable ensuite dans l'interface)
+  auth: {
+    user: process.env.AUTH_USER || 'admin',
+    initialPassword: process.env.AUTH_PASSWORD || 'camping',
+  },
+
+  // Purge automatique (RGPD) : supprime les données plus anciennes que N jours
+  purge: {
+    enabled: bool(process.env.PURGE_ENABLED, true),
+    retentionDays: parseInt(process.env.PURGE_RETENTION_DAYS || '7', 10),
+    cron: process.env.PURGE_CRON || '30 3 * * *', // tous les jours à 3h30
+  },
 };
 
 config.ftpConfigured = Boolean(config.ftp.host && config.ftp.user);

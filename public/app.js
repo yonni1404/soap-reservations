@@ -163,6 +163,9 @@ async function openDetail(bscrc) {
       <div class="bk-list">${bookingRows || '<p class="err-msg">Aucune tentative.</p>'}</div>
       <div id="fileViewer"></div>
     </div>
+    <div class="rgpd">
+      <button id="eraseBtn" class="btn danger" data-bscrc="${escapeHtml(r.bscrc)}">🗑 Supprimer les données de ce client (RGPD)</button>
+    </div>
   `;
 
   // Branche l'affichage du contenu sur chaque bouton "voir fichier"
@@ -173,6 +176,19 @@ async function openDetail(bscrc) {
       loadFile(b.dataset.file);
     };
   });
+
+  const eb = document.getElementById('eraseBtn');
+  if (eb) eb.onclick = async () => {
+    if (!confirm('Supprimer définitivement TOUTES les données de ce client ? Action irréversible.')) return;
+    try {
+      const res = await fetch('/api/erase', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bscrc: eb.dataset.bscrc }),
+      }).then((x) => x.json());
+      if (res.ok) { closeModal(); banner('ok', 'Données du client supprimées' + (res.email ? ' (' + res.email + ')' : '') + '.'); refresh(); }
+      else banner('err', res.error || 'Erreur');
+    } catch (_) { banner('err', 'Erreur réseau'); }
+  };
 
   $('#modal').classList.remove('hidden');
 }
@@ -262,7 +278,45 @@ $('#search').oninput = (e) => {
   searchTimer = setTimeout(() => { currentSearch = e.target.value.trim(); loadTable(); }, 250);
 };
 
+// ─── Authentification ────────────────────────────────────────────────────
+function showLogin() { $('#loginOverlay').classList.remove('hidden'); }
+function hideLogin() { $('#loginOverlay').classList.add('hidden'); }
+
+async function start() {
+  let authed = false;
+  try { authed = (await fetch('/api/me').then((r) => r.json())).authenticated; } catch (_) {}
+  if (authed) { hideLogin(); checkConfig(); refresh(); }
+  else { showLogin(); }
+}
+
+$('#loginForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const body = JSON.stringify({ user: $('#loginUser').value, password: $('#loginPass').value });
+  try {
+    const r = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }).then((x) => x.json());
+    if (r.ok) { $('#loginMsg').textContent = ''; $('#loginPass').value = ''; hideLogin(); checkConfig(); refresh(); }
+    else { $('#loginMsg').textContent = r.error || 'Erreur'; }
+  } catch (_) { $('#loginMsg').textContent = 'Erreur réseau'; }
+};
+
+$('#logoutBtn').onclick = async () => {
+  try { await fetch('/api/logout', { method: 'POST' }); } catch (_) {}
+  location.reload();
+};
+
+$('#pwBtn').onclick = () => { $('#pwMsg').textContent = ''; $('#pwForm').reset(); $('#pwModal').classList.remove('hidden'); };
+$('#pwClose').onclick = () => $('#pwModal').classList.add('hidden');
+$('#pwModal').onclick = (e) => { if (!e.target.closest('.modal-box')) $('#pwModal').classList.add('hidden'); };
+$('#pwForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const body = JSON.stringify({ current: $('#pwCurrent').value, next: $('#pwNext').value });
+  try {
+    const r = await fetch('/api/password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }).then((x) => x.json());
+    if (r.ok) { alert('Mot de passe changé. Reconnecte-toi avec le nouveau.'); location.reload(); }
+    else { $('#pwMsg').textContent = r.error || 'Erreur'; }
+  } catch (_) { $('#pwMsg').textContent = 'Erreur réseau'; }
+};
+
 // ─── Démarrage ──────────────────────────────────────────────────────────
-checkConfig();
-refresh();
-setInterval(loadStats, 30000); // rafraîchit les stats toutes les 30 s
+start();
+setInterval(() => { if ($('#loginOverlay').classList.contains('hidden')) loadStats(); }, 30000);

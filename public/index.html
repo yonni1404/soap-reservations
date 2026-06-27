@@ -15,6 +15,8 @@
     <div class="actions">
       <button id="scanBtn" class="btn primary">⟳ Scanner maintenant</button>
       <a id="exportBtn" class="btn" href="/api/export.csv">⤓ Export CSV</a>
+      <button id="pwBtn" class="btn" title="Changer le mot de passe">🔑</button>
+      <button id="logoutBtn" class="btn" title="Se déconnecter">⤴ Déconnexion</button>
     </div>
   </header>
 
@@ -58,6 +60,32 @@
       <button class="modal-close" id="modalClose">✕</button>
       <div id="modalContent"></div>
     </div>
+  </div>
+
+  <!-- Changement de mot de passe (modale) -->
+  <div id="pwModal" class="modal hidden">
+    <div class="modal-box" style="max-width:420px">
+      <button class="modal-close" id="pwClose">✕</button>
+      <h2>Changer le mot de passe</h2>
+      <form id="pwForm" class="login-form">
+        <input type="password" id="pwCurrent" placeholder="Mot de passe actuel" autocomplete="current-password" required>
+        <input type="password" id="pwNext" placeholder="Nouveau mot de passe (min. 6)" autocomplete="new-password" required>
+        <p id="pwMsg" class="login-msg"></p>
+        <button type="submit" class="btn primary">Valider</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Écran de connexion -->
+  <div id="loginOverlay" class="login-overlay hidden">
+    <form id="loginForm" class="login-box">
+      <h2>Connexion</h2>
+      <p class="sub">Suivi des réservations — Camping du Lac de Carouge</p>
+      <input type="text" id="loginUser" placeholder="Identifiant" autocomplete="username" value="admin">
+      <input type="password" id="loginPass" placeholder="Mot de passe" autocomplete="current-password" required>
+      <p id="loginMsg" class="login-msg"></p>
+      <button type="submit" class="btn primary">Se connecter</button>
+    </form>
   </div>
 
   <script src="app.js"></script>

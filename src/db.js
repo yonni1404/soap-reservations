@@ -79,6 +79,11 @@ db.exec(`
     seen_at  TEXT DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+  );
+
   CREATE INDEX IF NOT EXISTS idx_attempts_bscrc ON attempts(bscrc);
   CREATE INDEX IF NOT EXISTS idx_attempts_booking ON attempts(booking_id);
   CREATE INDEX IF NOT EXISTS idx_resa_status ON reservations(final_status);
@@ -315,8 +320,43 @@ function getFileRaw(filename) {
   return db.prepare('SELECT filename, bscrc, status, message, processed_at, raw FROM files WHERE filename = ?').get(filename);
 }
 
+// ─── Réglages (auth, etc.) ──────────────────────────────────────────────
+function getSetting(key) {
+  const r = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+  return r ? r.value : null;
+}
+function setSetting(key, value) {
+  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value);
+}
+
+// ─── Purge RGPD : supprime tout ce qui est plus ancien que N jours ───────
+function purgeOlderThan(days) {
+  const cutoff = new Date(Date.now() - days * 86400000).toISOString();
+  const r = {};
+  r.validations = db.prepare('DELETE FROM payment_validations WHERE seen_at < ?').run(cutoff).changes;
+  r.globalSeen = db.prepare('DELETE FROM global_seen WHERE seen_at < ?').run(cutoff).changes;
+  r.files = db.prepare('DELETE FROM files WHERE processed_at < ?').run(cutoff).changes;
+  r.reservations = db.prepare('DELETE FROM reservations WHERE last_update < ?').run(cutoff).changes;
+  r.attempts = db.prepare('DELETE FROM attempts WHERE seen_at < ?').run(cutoff).changes;
+  // Nettoie les tentatives orphelines (réservation déjà supprimée)
+  db.prepare('DELETE FROM attempts WHERE bscrc NOT IN (SELECT bscrc FROM reservations)').run();
+  return { cutoff, ...r };
+}
+
+// ─── Effacement RGPD : supprime toutes les données d'un client (par bscrc) ─
+function eraseClient(bscrc) {
+  const resa = db.prepare('SELECT email FROM reservations WHERE bscrc = ?').get(bscrc);
+  const bookingIds = db.prepare("SELECT DISTINCT booking_id FROM attempts WHERE bscrc = ? AND booking_id <> ''").all(bscrc).map((x) => x.booking_id);
+  for (const id of bookingIds) db.prepare('DELETE FROM payment_validations WHERE id_booking = ?').run(id);
+  db.prepare('DELETE FROM files WHERE bscrc = ?').run(bscrc);
+  db.prepare('DELETE FROM attempts WHERE bscrc = ?').run(bscrc);
+  const del = db.prepare('DELETE FROM reservations WHERE bscrc = ?').run(bscrc).changes;
+  return { deleted: del > 0, bscrc, email: resa ? resa.email : null, bookingIds };
+}
+
 module.exports = {
   db, alreadyProcessed, upsertFromParse, recordFile,
   listReservations, getReservation, stats, listFiles, getFileRaw,
   globalSeen, markGlobalSeen, recordValidation,
+  getSetting, setSetting, purgeOlderThan, eraseClient,
 };

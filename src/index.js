@@ -5,7 +5,11 @@ const path = require('path');
 const cron = require('node-cron');
 const config = require('./config');
 const apiRouter = require('./routes/api');
+const auth = require('./auth');
+const db = require('./db');
 const { runScan } = require('./processor');
+
+auth.init(); // crée le compte au premier démarrage (mot de passe modifiable ensuite)
 
 const app = express();
 app.use(express.json());
@@ -36,6 +40,18 @@ app.listen(config.port, () => {
     }
   } else {
     console.log('  Planificateur : désactivé');
+  }
+
+  // Purge automatique (RGPD)
+  if (config.purge.enabled && cron.validate(config.purge.cron)) {
+    cron.schedule(config.purge.cron, () => {
+      const r = db.purgeOlderThan(config.purge.retentionDays);
+      console.log(`[${new Date().toISOString()}] Purge RGPD (> ${config.purge.retentionDays} j) : ` +
+        `${r.reservations} résa, ${r.files} fichiers, ${r.validations} validations supprimés`);
+    });
+    console.log(`  Purge RGPD : active (${config.purge.cron}, conservation ${config.purge.retentionDays} j)`);
+  } else {
+    console.log('  Purge RGPD : désactivée');
   }
   console.log('');
 });

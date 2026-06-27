@@ -229,3 +229,31 @@ tbody tr:hover { background: var(--panel-2); }
   word-break: break-word;
 }
 .err-msg { color: var(--muted); font-size: 13px; margin-top: 4px; }
+
+/* Authentification */
+.login-overlay {
+  position: fixed; inset: 0;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100; padding: 20px;
+}
+.login-box, .login-form { display: flex; flex-direction: column; gap: 12px; }
+.login-box {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 32px; width: 340px; max-width: 100%;
+}
+.login-box h2 { margin: 0; }
+.login-box .sub { margin: 0 0 6px; }
+.login-overlay input, .login-form input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 12px; border-radius: 8px; font-size: 14px;
+}
+.login-msg { color: var(--red); font-size: 13px; min-height: 16px; margin: 0; }
+
+.btn.danger { background: #7f1d1d; border-color: #b91c1c; color: #fecaca; }
+.btn.danger:hover { background: #991b1b; }
+.rgpd { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 14px; }
