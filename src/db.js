@@ -4,7 +4,7 @@ const { DatabaseSync } = require('node:sqlite');
 const fs = require('fs');
 const path = require('path');
 const config = require('./config');
-const { parseSoapFile } = require('./parser');
+const { parseSoapFile, maskPII } = require('./parser');
 
 const dir = path.dirname(config.dbPath);
 if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -94,6 +94,8 @@ db.exec(`
 for (const col of ['payment_method TEXT', 'payment_type TEXT', 'will_pay_offsite INTEGER', 'tx_time TEXT', 'payment_provider TEXT']) {
   try { db.exec(`ALTER TABLE attempts ADD COLUMN ${col}`); } catch (_) { /* déjà présente */ }
 }
+// Marqueur d'anonymisation RGPD sur les réservations
+try { db.exec('ALTER TABLE reservations ADD COLUMN anonymized INTEGER DEFAULT 0'); } catch (_) { /* déjà présente */ }
 
 // Backfill : renseigne moyen de paiement + fournisseur + horodatage des tentatives existantes
 (function backfillAttempts() {
@@ -329,18 +331,38 @@ function setSetting(key, value) {
   db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value);
 }
 
-// ─── Purge RGPD : supprime tout ce qui est plus ancien que N jours ───────
+// ─── Purge RGPD ──────────────────────────────────────────────────────────
+// Réservations en erreur (PMS/autre) trop anciennes → ANONYMISÉES (logs gardés, PII retirée).
+// Toutes les autres réservations trop anciennes → SUPPRIMÉES totalement.
 function purgeOlderThan(days) {
   const cutoff = new Date(Date.now() - days * 86400000).toISOString();
-  const r = {};
-  r.validations = db.prepare('DELETE FROM payment_validations WHERE seen_at < ?').run(cutoff).changes;
-  r.globalSeen = db.prepare('DELETE FROM global_seen WHERE seen_at < ?').run(cutoff).changes;
-  r.files = db.prepare('DELETE FROM files WHERE processed_at < ?').run(cutoff).changes;
-  r.reservations = db.prepare('DELETE FROM reservations WHERE last_update < ?').run(cutoff).changes;
-  r.attempts = db.prepare('DELETE FROM attempts WHERE seen_at < ?').run(cutoff).changes;
-  // Nettoie les tentatives orphelines (réservation déjà supprimée)
+  const ERR = ['error_pms', 'error_other'];
+  let anonymized = 0;
+  let deleted = 0;
+
+  const old = db.prepare('SELECT bscrc, final_status, anonymized FROM reservations WHERE last_update < ?').all(cutoff);
+  const maskRaw = db.prepare('UPDATE files SET raw = ? WHERE filename = ?');
+  for (const r of old) {
+    if (ERR.includes(r.final_status)) {
+      if (r.anonymized) continue; // déjà anonymisée
+      db.prepare("UPDATE reservations SET email = '', tel = '', anonymized = 1 WHERE bscrc = ?").run(r.bscrc);
+      const fs = db.prepare('SELECT filename, raw FROM files WHERE bscrc = ?').all(r.bscrc);
+      for (const f of fs) if (f.raw) maskRaw.run(maskPII(f.raw), f.filename);
+      anonymized++;
+    } else {
+      eraseClient(r.bscrc); // suppression totale (résa + attempts + files + validations)
+      deleted++;
+    }
+  }
+
+  // Annexes : fichiers /global déjà disparus du FTP, validations et tentatives orphelines
+  const globalSeen = db.prepare('DELETE FROM global_seen WHERE seen_at < ?').run(cutoff).changes;
   db.prepare('DELETE FROM attempts WHERE bscrc NOT IN (SELECT bscrc FROM reservations)').run();
-  return { cutoff, ...r };
+  const validations = db.prepare(
+    "DELETE FROM payment_validations WHERE seen_at < ? AND id_booking NOT IN (SELECT booking_id FROM attempts WHERE booking_id <> '')"
+  ).run(cutoff).changes;
+
+  return { cutoff, anonymized, deleted, globalSeen, validations };
 }
 
 // ─── Effacement RGPD : supprime toutes les données d'un client (par bscrc) ─

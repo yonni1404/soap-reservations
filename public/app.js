@@ -81,9 +81,11 @@ async function loadTable() {
   for (const r of rows) {
     const tr = document.createElement('tr');
     tr.onclick = () => openDetail(r.bscrc);
-    const client = r.email
-      ? `${escapeHtml(r.email)}${r.tel ? `<br><span class="muted">${escapeHtml(r.tel)}</span>` : ''}`
-      : '—';
+    const client = r.anonymized
+      ? '<span class="muted">🔒 anonymisé (RGPD)</span>'
+      : (r.email
+        ? `${escapeHtml(r.email)}${r.tel ? `<br><span class="muted">${escapeHtml(r.tel)}</span>` : ''}`
+        : '—');
     const methods = [...new Set((r.methods || r.payment_method || '').split(',').map((s) => s.trim()).filter(Boolean))];
     const payCell = methods.length ? `<span class="pay-list">${methods.map(paymentLogo).join('')}</span>` : '—';
     const numCell = `${r.booking_id || '—'}${r.booking_count > 1 ? `<div class="muted">${r.booking_count} n° résa</div>` : ''}`;

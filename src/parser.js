@@ -221,6 +221,13 @@ function maskSecret(raw) {
   return String(raw).replace(/(<[\w:]*password>)(.*?)(<\/[\w:]*password>)/gi, '$1******$3');
 }
 
+// Masque les données personnelles (email, téléphone) dans le contenu brut JSON
+function maskPII(raw) {
+  return String(raw)
+    .replace(/("email"\s*:\s*")[^"]*(")/gi, '$1$2')
+    .replace(/("tel"\s*:\s*")[^"]*(")/gi, '$1$2');
+}
+
 // Cherche un résultat booléen (clé du type ...SuccedResult / ...Success / paid / valid)
 function findResultBool(obj) {
   if (!obj || typeof obj !== 'object') return undefined;
@@ -272,4 +279,4 @@ function parseGlobalFile(content) {
   };
 }
 
-module.exports = { parseSoapFile, parseJsonLog, parsePrintR, findFirst, determineStatus, parseGlobalFile, maskSecret };
+module.exports = { parseSoapFile, parseJsonLog, parsePrintR, findFirst, determineStatus, parseGlobalFile, maskSecret, maskPII };
