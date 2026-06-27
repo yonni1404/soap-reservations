@@ -213,4 +213,63 @@ function parseSoapFile(content) {
   return parsePrintRFile(text);
 }
 
-module.exports = { parseSoapFile, parseJsonLog, parsePrintR, findFirst, determineStatus };
+// ─── Fichiers /global (logs de tous les appels SOAP, dont les validations de paiement) ───
+// Format : { time, log: { "Soap METHOD", "Soap REQUEST" (XML string), "Soap RESPONSE" {obj} } }
+
+// Masque le mot de passe secureholiday présent en clair dans le XML REQUEST
+function maskSecret(raw) {
+  return String(raw).replace(/(<[\w:]*password>)(.*?)(<\/[\w:]*password>)/gi, '$1******$3');
+}
+
+// Cherche un résultat booléen (clé du type ...SuccedResult / ...Success / paid / valid)
+function findResultBool(obj) {
+  if (!obj || typeof obj !== 'object') return undefined;
+  for (const k of Object.keys(obj)) {
+    if (typeof obj[k] === 'boolean' && /succed|success|result|paid|valid/i.test(k)) return obj[k];
+  }
+  for (const k of Object.keys(obj)) {
+    if (obj[k] && typeof obj[k] === 'object') {
+      const r = findResultBool(obj[k]);
+      if (r !== undefined) return r;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Analyse un fichier /global. Renvoie le type d'appel et, si c'est une
+ * validation de paiement, le n° de réservation et le résultat.
+ */
+function parseGlobalFile(content) {
+  let d;
+  try { d = JSON.parse(content); } catch (_) { return { isValidation: false }; }
+  const log = d.log || {};
+  const method = clean(log['Soap METHOD']);
+  const requestXml = String(log['Soap REQUEST'] || '');
+  const response = log['Soap RESPONSE'];
+
+  const m = requestXml.match(/<[\w:]*idBooking>\s*(\d+)\s*<\/[\w:]*idBooking>/i);
+  const idBooking = m ? m[1] : '';
+
+  const result = findResultBool(response);
+  const respKeys = response && typeof response === 'object' ? Object.keys(response).join(' ') : '';
+
+  // Validation de paiement = référence un n° de résa + résultat booléen + contexte "paiement validé"
+  const looksPayment = /verif|succed|success|paid|paiement|payment|payline|stripe/i.test(method + ' ' + respKeys);
+  const isValidation = Boolean(idBooking) && typeof result === 'boolean' && looksPayment;
+
+  const provider = /payline/i.test(method) ? 'Payline'
+    : (/stripe/i.test(method) ? 'Stripe' : (method ? 'Autre' : ''));
+
+  return {
+    time: clean(d.time),
+    method,
+    idBooking,
+    provider,
+    validated: result === true,
+    result,
+    isValidation,
+  };
+}
+
+module.exports = { parseSoapFile, parseJsonLog, parsePrintR, findFirst, determineStatus, parseGlobalFile, maskSecret };

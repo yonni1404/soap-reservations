@@ -16,7 +16,12 @@ const config = {
     dir: process.env.FTP_DIR || '/',
     archiveDir: process.env.FTP_ARCHIVE_DIR || '/traites',
     filePattern: process.env.FTP_FILE_PATTERN || '\\.txt$',
+    // Dossier des logs SOAP globaux (contient les validations de paiement)
+    globalDir: process.env.FTP_GLOBAL_DIR || '/global',
+    // On ne télécharge que les petits fichiers (les validations sont minuscules) — octets
+    globalMaxSize: parseInt(process.env.FTP_GLOBAL_MAX_SIZE || '12000', 10),
   },
+  scanGlobal: bool(process.env.SCAN_GLOBAL, true),
   afterProcess: (process.env.AFTER_PROCESS || 'archive').toLowerCase(), // archive | delete | keep
   schedule: {
     enabled: bool(process.env.SCHEDULE_ENABLED, true),

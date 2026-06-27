@@ -66,7 +66,7 @@ router.get('/export.csv', (req, res) => {
   const cols = [
     'bscrc', 'booking_id', 'dossier_id', 'tx_time', 'email', 'tel',
     'payment_method', 'payment_type', 'payment_provider', 'payment_id', 'amount', 'will_pay_offsite',
-    'final_status', 'error_code', 'error_message', 'attempts', 'has_divergence',
+    'pay_state', 'paid_at', 'final_status', 'error_code', 'error_message', 'attempts', 'has_divergence',
     'first_seen', 'last_update',
   ];
   const esc = (v) => {

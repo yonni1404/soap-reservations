@@ -43,6 +43,19 @@ function paymentLogo(method) {
   return wrap(textChip('#475569', '#e2e8f0', method), method);
 }
 
+// ─── État d'encaissement ─────────────────────────────────────────────────
+const PAY_STATE = {
+  paid: { label: '✅ Payé', cls: 'success', title: 'Paiement en ligne validé (VerifPaylinePaiementSucced)' },
+  deferred: { label: '🏦 Virement attendu', cls: 'pending', title: 'Réservation ferme en virement — encaissement à confirmer hors ligne' },
+  unpaid: { label: '❔ À vérifier', cls: 'pending', title: 'Aucune validation Payline trouvée : abandon possible, ou validation hors de la fenêtre des logs /global' },
+  stripe_unknown: { label: 'Stripe — non vérifiable', cls: 'pending', title: 'Paiement via Stripe (iDEAL/Bancontact) — la validation n\'est pas disponible sur le FTP' },
+  unknown: { label: '—', cls: 'pending', title: '' },
+};
+function payBadge(state) {
+  const s = PAY_STATE[state] || PAY_STATE.unknown;
+  return `<span class="badge ${s.cls}" title="${s.title}">${s.label}</span>`;
+}
+
 async function loadStats() {
   const s = await fetch('/api/stats').then((r) => r.json());
   $('#stats').innerHTML = `
@@ -81,6 +94,7 @@ async function loadTable() {
       <td>${numCell}</td>
       <td>${euro(r.amount)}${r.has_divergence ? '<span class="diverge" title="Montant divergent entre tentatives">⚠</span>' : ''}</td>
       <td>${payCell}</td>
+      <td>${payBadge(r.pay_state)}</td>
       <td>${r.attempts}</td>
     `;
     tbody.appendChild(tr);
@@ -114,6 +128,9 @@ async function openDetail(bscrc) {
           <span class="bk-num mono">N° ${b.booking_id || '—'}</span>
           <span class="badge ${b.status}">${STATUS_LABEL[b.status] || b.status}</span>
           ${kind}
+          ${b.validation ? (b.validation.validated
+            ? `<span class="kind paid">✅ payé · ${escapeHtml(b.validation.provider || '')}</span>`
+            : '<span class="kind nopaid">paiement non validé</span>') : ''}
           ${b.is_last ? '<span class="kind last">dernière tentative</span>' : ''}
           <span class="muted">${dt(b.tx_time || b.seen_at)} · ${euro(b.amount)}</span>
         </div>
@@ -130,6 +147,7 @@ async function openDetail(bscrc) {
       <dt>Téléphone</dt><dd>${r.tel ? `<a href="tel:${escapeHtml(r.tel)}">${escapeHtml(r.tel)}</a>` : '—'}</dd>
       <dt>N° réservation</dt><dd>${r.booking_id || '—'}</dd>
       <dt>N° dossier</dt><dd>${r.dossier_id || '—'}</dd>
+      <dt>Encaissement</dt><dd>${payBadge(r.pay_state)}${r.paid_at ? ' le ' + dt(r.paid_at) : ''}</dd>
       <dt>Montant</dt><dd>${euro(r.amount)}${r.has_divergence ? ' ⚠ divergence détectée' : ''}</dd>
       <dt>Paiement</dt><dd>${paymentLogo(r.payment_method)} ${escapeHtml(r.payment_method || '—')}${r.payment_type ? ` · ${escapeHtml(r.payment_type)}` : ''} · ID ${r.payment_id || '—'}</dd>
       <dt>Fournisseur paiement</dt><dd>${r.payment_provider || '—'}</dd>
@@ -205,7 +223,7 @@ async function scan() {
     if (!s.ok) {
       banner('err', 'Scan impossible : ' + (s.error || 'erreur inconnue'));
     } else {
-      banner('ok', `Scan terminé : ${s.found} fichier(s) trouvé(s), ${s.processed} traité(s), ${s.newReservations} nouvelle(s), ${s.updated} mise(s) à jour, ${s.statusUpgrades} statut(s) corrigé(s), ${s.archived} archivé(s).` + (s.errors?.length ? ' ⚠ ' + s.errors.length + ' erreur(s).' : ''));
+      banner('ok', `Scan terminé : ${s.found} fichier(s) résa, ${s.processed} traité(s), ${s.newReservations} nouvelle(s), ${s.archived} archivé(s) · /global : ${s.globalScanned} lu(s), ${s.validations} validation(s) paiement (${s.paid} payé·s).` + (s.errors?.length ? ' ⚠ ' + s.errors.length + ' erreur(s).' : ''));
     }
     await refresh();
   } catch (e) {

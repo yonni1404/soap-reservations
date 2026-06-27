@@ -62,27 +62,46 @@ db.exec(`
     processed_at TEXT DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS payment_validations (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_booking TEXT,
+    method     TEXT,
+    provider   TEXT,
+    validated  INTEGER,
+    tx_time    TEXT,
+    filename   TEXT UNIQUE,
+    raw        TEXT,
+    seen_at    TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS global_seen (
+    filename TEXT PRIMARY KEY,
+    seen_at  TEXT DEFAULT (datetime('now'))
+  );
+
   CREATE INDEX IF NOT EXISTS idx_attempts_bscrc ON attempts(bscrc);
+  CREATE INDEX IF NOT EXISTS idx_attempts_booking ON attempts(booking_id);
   CREATE INDEX IF NOT EXISTS idx_resa_status ON reservations(final_status);
+  CREATE INDEX IF NOT EXISTS idx_pv_booking ON payment_validations(id_booking);
 `);
 
 // Migration : colonnes paiement + horodatage par tentative (ajoutées si absentes)
-for (const col of ['payment_method TEXT', 'payment_type TEXT', 'will_pay_offsite INTEGER', 'tx_time TEXT']) {
+for (const col of ['payment_method TEXT', 'payment_type TEXT', 'will_pay_offsite INTEGER', 'tx_time TEXT', 'payment_provider TEXT']) {
   try { db.exec(`ALTER TABLE attempts ADD COLUMN ${col}`); } catch (_) { /* déjà présente */ }
 }
 
-// Backfill : renseigne moyen de paiement + horodatage des tentatives existantes depuis le contenu stocké
+// Backfill : renseigne moyen de paiement + fournisseur + horodatage des tentatives existantes
 (function backfillAttempts() {
   const rows = db.prepare(`
     SELECT a.id, f.raw FROM attempts a
     JOIN files f ON f.filename = a.filename
-    WHERE a.tx_time IS NULL
+    WHERE a.payment_provider IS NULL
   `).all();
-  const upd = db.prepare('UPDATE attempts SET payment_method = ?, payment_type = ?, will_pay_offsite = ?, tx_time = ? WHERE id = ?');
+  const upd = db.prepare('UPDATE attempts SET payment_method = ?, payment_type = ?, will_pay_offsite = ?, tx_time = ?, payment_provider = ? WHERE id = ?');
   for (const r of rows) {
     try {
       const { data } = parseSoapFile(r.raw);
-      upd.run(data.paymentMethod, data.paymentType, data.willPayOffsite, data.txTime, r.id);
+      upd.run(data.paymentMethod, data.paymentType, data.willPayOffsite, data.txTime, data.paymentProvider, r.id);
     } catch (_) { /* fichier illisible */ }
   }
 })();
@@ -103,12 +122,12 @@ function upsertFromParse(filename, data, raw) {
   const now = new Date().toISOString();
 
   db.prepare(`
-    INSERT INTO attempts (bscrc, filename, status, error_code, error_message, amount, booking_id, recorded, payment_method, payment_type, will_pay_offsite, tx_time, seen_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO attempts (bscrc, filename, status, error_code, error_message, amount, booking_id, recorded, payment_method, payment_type, will_pay_offsite, tx_time, payment_provider, seen_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     data.bscrc, filename, data.status, data.errorCode, data.errorMessage,
     data.amount, data.bookingId, data.recorded,
-    data.paymentMethod, data.paymentType, data.willPayOffsite, data.txTime, now
+    data.paymentMethod, data.paymentType, data.willPayOffsite, data.txTime, data.paymentProvider, now
   );
 
   const existing = db.prepare('SELECT * FROM reservations WHERE bscrc = ?').get(data.bscrc);
@@ -168,6 +187,33 @@ function upsertFromParse(filename, data, raw) {
   return { isNew: false, statusChanged: upgrade, divergence };
 }
 
+// ─── Validations de paiement (/global) ──────────────────────────────────
+function globalSeen(filename) {
+  return Boolean(db.prepare('SELECT 1 FROM global_seen WHERE filename = ?').get(filename));
+}
+
+function markGlobalSeen(filename) {
+  db.prepare('INSERT OR IGNORE INTO global_seen (filename, seen_at) VALUES (?, ?)')
+    .run(filename, new Date().toISOString());
+}
+
+function recordValidation(filename, v, rawMasked) {
+  db.prepare(`
+    INSERT OR IGNORE INTO payment_validations (id_booking, method, provider, validated, tx_time, filename, raw, seen_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(v.idBooking, v.method, v.provider, v.validated ? 1 : 0, v.time, filename, rawMasked, new Date().toISOString());
+}
+
+// État d'encaissement d'une réservation
+function computePayState({ paid, has_virement, providers }) {
+  if (paid) return 'paid';                                  // paiement en ligne validé
+  if (has_virement) return 'deferred';                      // virement ferme, attente d'encaissement
+  const p = (providers || '').toLowerCase();
+  if (p.includes('payline')) return 'unpaid';               // Payline attendu mais pas de validation → abandon probable
+  if (p.includes('stripe')) return 'stripe_unknown';        // Stripe : validation non disponible sur le FTP
+  return 'unknown';
+}
+
 function recordFile(filename, { bscrc, status, action, message, raw }) {
   db.prepare(`
     INSERT INTO files (filename, bscrc, status, action, message, raw, processed_at)
@@ -182,7 +228,11 @@ function recordFile(filename, { bscrc, status, action, message, raw }) {
 function listReservations({ status, search } = {}) {
   let sql = `SELECT *,
     (SELECT GROUP_CONCAT(DISTINCT payment_method) FROM attempts WHERE attempts.bscrc = reservations.bscrc) AS methods,
-    (SELECT COUNT(DISTINCT booking_id) FROM attempts WHERE attempts.bscrc = reservations.bscrc AND booking_id <> '') AS booking_count
+    (SELECT COUNT(DISTINCT booking_id) FROM attempts WHERE attempts.bscrc = reservations.bscrc AND booking_id <> '') AS booking_count,
+    (SELECT GROUP_CONCAT(DISTINCT payment_provider) FROM attempts WHERE attempts.bscrc = reservations.bscrc) AS providers,
+    (SELECT MAX(CASE WHEN will_pay_offsite = 0 THEN 1 ELSE 0 END) FROM attempts WHERE attempts.bscrc = reservations.bscrc) AS has_virement,
+    (SELECT MAX(pv.validated) FROM payment_validations pv JOIN attempts a ON a.booking_id = pv.id_booking WHERE a.bscrc = reservations.bscrc) AS paid,
+    (SELECT pv.tx_time FROM payment_validations pv JOIN attempts a ON a.booking_id = pv.id_booking WHERE a.bscrc = reservations.bscrc AND pv.validated = 1 LIMIT 1) AS paid_at
     FROM reservations`;
   const where = [];
   const params = [];
@@ -194,7 +244,9 @@ function listReservations({ status, search } = {}) {
   }
   if (where.length) sql += ' WHERE ' + where.join(' AND ');
   sql += ' ORDER BY last_update DESC LIMIT 1000';
-  return db.prepare(sql).all(...params);
+  const rows = db.prepare(sql).all(...params);
+  for (const r of rows) r.pay_state = computePayState(r);
+  return rows;
 }
 
 function getReservation(bscrc) {
@@ -226,7 +278,23 @@ function getReservation(bscrc) {
     .sort((a, b) => String(a.tx_time || a.seen_at || '').localeCompare(String(b.tx_time || b.seen_at || '')));
   if (bookings.length) bookings[bookings.length - 1].is_last = true; // dernière tentative
 
-  return { ...resa, attempts_list: att, bookings };
+  // Validations de paiement liées aux n° de réservation de ce client
+  const bookingIds = [...new Set(att.map((a) => a.booking_id).filter(Boolean))];
+  let validations = [];
+  if (bookingIds.length) {
+    const ph = bookingIds.map(() => '?').join(',');
+    validations = db.prepare(`SELECT * FROM payment_validations WHERE id_booking IN (${ph})`).all(...bookingIds);
+  }
+  const vByBooking = new Map(validations.map((v) => [v.id_booking, v]));
+  for (const b of bookings) b.validation = vByBooking.get(b.booking_id) || null;
+
+  const paid = validations.some((v) => v.validated);
+  const providers = [...new Set(att.map((a) => a.payment_provider).filter(Boolean))].join(',');
+  const has_virement = att.some((a) => a.will_pay_offsite === 0) ? 1 : 0;
+  const pay_state = computePayState({ paid, has_virement, providers });
+  const paid_at = (validations.find((v) => v.validated) || {}).tx_time || null;
+
+  return { ...resa, attempts_list: att, bookings, validations, pay_state, paid_at, providers };
 }
 
 function stats() {
@@ -250,4 +318,5 @@ function getFileRaw(filename) {
 module.exports = {
   db, alreadyProcessed, upsertFromParse, recordFile,
   listReservations, getReservation, stats, listFiles, getFileRaw,
+  globalSeen, markGlobalSeen, recordValidation,
 };

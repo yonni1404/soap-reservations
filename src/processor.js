@@ -3,7 +3,7 @@
 const config = require('./config');
 const ftp = require('./ftp');
 const db = require('./db');
-const { parseSoapFile } = require('./parser');
+const { parseSoapFile, parseGlobalFile, maskSecret } = require('./parser');
 
 let scanning = false;
 let lastScan = null;
@@ -29,7 +29,8 @@ async function runScan({ trigger = 'manuel' } = {}) {
     ok: true, trigger, startedAt: new Date().toISOString(),
     found: 0, processed: 0, skipped: 0, parseErrors: 0,
     newReservations: 0, updated: 0, statusUpgrades: 0, divergences: 0,
-    archived: 0, deleted: 0, errors: [],
+    archived: 0, deleted: 0,
+    globalScanned: 0, validations: 0, paid: 0, errors: [],
   };
 
   let client;
@@ -88,6 +89,33 @@ async function runScan({ trigger = 'manuel' } = {}) {
         message: `${data.status}${res.statusChanged ? ' (statut mis à jour)' : ''}`,
         raw: content,
       });
+    }
+
+    // 2e source : validations de paiement dans /global (on ne déplace rien, on note les fichiers vus)
+    if (config.scanGlobal) {
+      try {
+        const gfiles = await ftp.listGlobal(client);
+        for (const gf of gfiles) {
+          if (db.globalSeen(gf.name)) continue;
+          let content;
+          try {
+            content = await ftp.downloadTextFrom(client, config.ftp.globalDir, gf.name);
+          } catch (e) {
+            summary.errors.push(`global/${gf.name}: téléchargement échoué (${e.message})`);
+            continue;
+          }
+          const g = parseGlobalFile(content);
+          if (g.isValidation) {
+            db.recordValidation(gf.name, g, maskSecret(content));
+            summary.validations++;
+            if (g.validated) summary.paid++;
+          }
+          db.markGlobalSeen(gf.name);
+          summary.globalScanned++;
+        }
+      } catch (e) {
+        summary.errors.push(`Scan /global: ${e.message}`);
+      }
     }
   } catch (e) {
     summary.ok = false;

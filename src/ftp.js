@@ -39,6 +39,22 @@ async function downloadText(client, filename) {
   return Buffer.concat(chunks).toString('utf8');
 }
 
+/** Liste les petits fichiers du dossier /global (candidats validations de paiement). */
+async function listGlobal(client) {
+  const list = await client.list(config.ftp.globalDir);
+  return list
+    .filter((f) => f.isFile && f.size <= config.ftp.globalMaxSize)
+    .map((f) => ({ name: f.name, size: f.size }));
+}
+
+/** Télécharge un fichier d'un dossier arbitraire et renvoie son contenu texte. */
+async function downloadTextFrom(client, dir, filename) {
+  const chunks = [];
+  const sink = new Writable({ write(chunk, _enc, cb) { chunks.push(chunk); cb(); } });
+  await client.downloadTo(sink, joinRemote(dir, filename));
+  return Buffer.concat(chunks).toString('utf8');
+}
+
 /** Déplace un fichier traité vers le dossier d'archive (le crée si besoin). */
 async function archiveFile(client, filename) {
   await ensureDir(client, config.ftp.archiveDir);
@@ -74,4 +90,4 @@ async function testConnection() {
   }
 }
 
-module.exports = { connect, listFiles, downloadText, archiveFile, deleteFile, testConnection };
+module.exports = { connect, listFiles, downloadText, listGlobal, downloadTextFrom, archiveFile, deleteFile, testConnection };
